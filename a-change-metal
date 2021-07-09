@@ -1,0 +1,65 @@
+#!/bin/csh
+
+# 21 apr 17: swaps out the metal centre in a MOF-74 ORCA input
+
+if (null$1 == null) then
+ echo ''
+ echo 'a-change-metal file OldMetal NewMetal OldCharge NewCharge OldMult NewMult NewName' 
+ echo ' $ a-change-metal mg-mof74test.inp Mg Ni 0 1 0 1 ni-mof74test'
+ echo ' this script swaps out the metal in a MOF input file for ORCA'
+ echo ' it also updates the charge and multiplicity of the system with the new metal'
+ echo ' in case this has changed.'
+ echo ''
+ exit
+endif 
+
+# assign input arguments to more readable names
+set file=$1
+set Old=$2
+set New=$3
+set oldcharge=$4
+set newcharge=$5
+set oldmult=$6
+set newmult=$7
+set newname=$8
+
+# check that the file $file is actually in the directory
+ set ok=0
+ ls $file && set ok=1
+# swap out the metal in the coordinates list
+set found=0
+ if (${ok} == 1) then
+  grep ${Old} ${file} && set found=1
+  if (${found} == 0) then
+   echo '... ' ${Old} ' was not found in the input file ' ${file}
+  else
+   echo '...found metal ' ${Old} 'in file ' ${file}
+   echo '...will be replaced with' ${New}
+  endif
+  sed -e "s/${Old}/${New}/" $file > temp
+ else 
+  echo 'the input file not found. Check first.'
+ endif 
+
+# Any changes to the charge and multiplicity of the system?
+if (${found} == 1) then
+ if (${oldcharge} == ${newcharge}  &&  ${oldmult} == ${newmult}) then
+  set found=2
+  echo '...charge & multiplicity have not changed.'
+ else 
+  echo '...with the change of metal, the charge of the system changes from' ${oldcharge} ' to ' ${newcharge}
+  echo '...and the multiplicity changes from ' ${oldmult} ' to ' ${newmult}
+  grep -q 'xyz' temp
+  sed -e "s/xyz ${oldcharge} ${oldmult}/xyz ${newcharge} ${newmult}/" temp >> temp1
+ endif
+else
+ echo '...input file not found. Check first.'  
+endif
+# copy the current temp file to a normal file name 
+if (${found} == 1 ) then
+ cp temp1 ${newname}.inp
+else
+ cp temp ${newname}.inp
+endif
+# clean up temporary files and exit 
+ \rm temp*

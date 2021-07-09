@@ -1,0 +1,50 @@
+#!/bin/csh
+
+# 03 march 17: get optimized geometry from nwchem output; build Aces3 ZMAT
+
+if (null$1 == null) then
+ echo ''
+ echo 'a-nwchem-to-aces3 functional mol met '
+ echo 'functionals: ssbd | tpssh '
+ echo 'mol: cytosine | guanine | thymine | adenine '
+ echo 'met: mp2 | ccsd '
+ exit
+endif 
+
+# read input parameters
+set fun=$1 # functional used in nwchem calculation
+set mol=$2 # molecule
+set met=$3 # method desired in Aces3 calculation
+
+#  check if optimization converged
+set ok=0
+grep -q 'Optimization converged' ${mol}_${fun}.out && set ok=1
+if ($ok == 1) then
+ sed -ne "/ Output coordinates in angstroms /, /      Atomic Mass/ p" geom_temp
+ echo 'comment line' > zmat_temp
+ echo geom_temp >> zmat_temp
+ echo '' >> zmat_temp # requires a blank line after coords before namelist
+else  # error message if optimization did not converge. Won't build ZMAT.
+ echo 'optimization did not converge.'
+ echo 'did not build Aces3 input. Check ' ${mol}_${fun}.out ' for issues.'
+endif
+# if it converged, build MP2 or CCSD Aces3 inputs
+if (${met} == mp2) then
+ echo ' *ACES2(CALC=MBPT(2),BASIS=AUG-CC-PVTZ' >> zmat_temp
+if (${met} == ccsd) then
+ echo '*ACES2(CALC=ccsd,BASIS=AUG-CC-PVTZ' >> zmat_temp
+endif 
+ echo 'geom_opt=full' >> zmat_temp
+ echo 'spherical=on' >> zmat_temp
+ echo 'REF=RHF,UNITS=ANGSTROM' >> zmat_temp
+ echo 'COORDINATES=CARTESIAN' >> zmat_temp
+ echo 'SCF_CONV=6' >> zmat_temp
+ echo 'SYMMETRY=NONE)' >> zmat_temp
+ echo '' >> zmat_temp
+ echo '*SIP' >> zmat_temp
+ echo 'MAXMEM= 1200' >> zmat_temp
+ echo 'TIMERS=NO' >> zmat_temp
+# move zmat_temp to ZMAT and clean up temp files
+cat zmat_temp
+mv zmat_temp ZMAT
+#\rm geom_temp 

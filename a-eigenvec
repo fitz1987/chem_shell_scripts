@@ -1,0 +1,37 @@
+#!/bin/csh
+# 15 aug 2016
+# get eigenvectors, their indices, and symmetry labels
+# from a gamess-us calculation
+# useful when you need to know fermion irrep occupancies
+# for a dirac relccsd calculation.
+
+if (null$1 == null) then
+ echo ''
+ echo 'this script gets eigenvectors, their indices, and symmetry labels'
+ echo 'from a gamess-us .out file.'
+ echo 'usage:'
+ echo 'a-eigenvec file.out'
+ echo ''
+ exit
+endif
+
+# check that file.out exited gracefully
+# give an error message if it didn't.
+set out=$1
+set OK=0
+grep -q 'gracefully' $out && set OK=1
+if ( $OK == 0) then
+ echo $out 'may not have finished correctly. Check for errors.'
+ echo ''
+ exit
+endif
+
+if ( $OK == 1) then
+ grep '          EIGENVECTORS' $out
+sed -ne "/          EIGENVECTORS/,/ ...... END OF / p" $out >> temp1
+cat temp1 
+
+ else exit
+endif
+# clean up temp files
+#\rm  

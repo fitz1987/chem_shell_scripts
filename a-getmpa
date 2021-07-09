@@ -1,0 +1,25 @@
+#!bin/csh
+
+# 28 sept 16: get MPA from a dirac calcuation
+# print to a separate file.
+
+if (null$1 == null) then
+ echo ''
+ echo 'a-getmpa file.out'
+ echo ''
+ exit
+endif
+
+set file=$1
+set pref=`echo $file:r`
+echo ''
+
+set result=${pref}-MPA
+# send all data to ${pref}-MPA
+
+grep ' Mulliken population analysis ' $file 
+sed -ne "/ Mulliken population analysis /, / E N D   of / p" $file >> temp
+mv temp ${pref}-MPA
+echo 'Mulliken Population Analysis data copied to:' ${pref}-MPA
+echo 'exiting.'
+#done! 

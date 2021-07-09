@@ -1,0 +1,135 @@
+#!/bin/csh
+
+# 24 apr 17: add orca; make temp file names program-specific
+# 23 mar 17: fix a typo in a comment
+# 17 mar 17: add nwchem
+# 10 mar 17: check that a geometry optimization job converged
+#            by looking for convergence and at frequencies
+
+
+if (null$1 == null) then
+ echo ''
+ echo ' $ a-checkfrequencies file code'
+ echo '  a-checkfrequencies test.out orca'
+ echo ' this script collects frequencies so you can quickly check for imaginaries..'
+ echo ' file: full name of output, including extension.'
+ echo ' code: aces3 | nwchem | gamess | orca '
+ echo ' currently aces3, orca, and nwchem are supported'
+#       this is because aces3 always generates summary.out and aces3.log
+#       they have the same name regardless of the job.
+ echo ''
+ exit
+endif 
+
+set file=$1
+set code=$2
+# determine what the structure of the output file will look like
+
+if (${code} == aces3) then
+  set present=0
+  ls aces3.log && set present=1
+   if (${present} == 0) then 
+    echo 'there is no output file in' `pwd`
+   endif
+endif
+if (${code} == nwchem) then
+  set present=0
+  echo '...checking for file: ' $file
+  ls ${file} && set present=1 && echo '...found it!'
+  if ( ${present} == 0 ) then 
+   echo ${file} 'is not present in the directory: ' `pwd`
+  endif
+endif
+if (${code} == orca) then
+  set present=0
+  echo '...checking for file:' $file
+  ls $file && set present=1
+  if (${present} != 1) then
+   echo '...file' $file 'not found in directory: ' `pwd` 
+  endif
+endif
+if (${code} == gamess) then
+#  set name=`${file}:r` # file will be molecule_method_basis.out
+endif 
+
+switch (${code})
+##### ACES3
+     case aces3
+      set OK=0 # check that the calculation converged and that the frequencies are present
+      grep '   Convergence criterion satisfied.  Optimization completed.' summary.out && set OK=1
+      grep -q '   Frequencies of the updated Hessian at convergence' aces3.log 
+#     cut out the frequencies and put them in a list to echo to stdout for inspection
+      sed -ne "/   Frequencies of the updated Hessian at convergence/, /Warning: Frequencies based/ p" aces3.log > acestemp1
+      sed -ie "s/   Frequencies of the updated Hessian at convergence:// " acestemp1
+      sed -ie "s/Warning: Frequencies based on the updated Hessian are not very accurate.//" acestemp1
+      set array1=`cat acestemp1`
+      echo '...here are the frequencies at the optimized geometry:'
+      echo $array1
+      echo '...check for imaginaries.'
+#     save the frequencies in a convenient file
+      echo '...frequencies saved to:' freq
+      cat acestemp1 >> freq
+#     get the optimized coordinates and put them in a convenient file
+      grep -q '  Summary of optimized Cartesian coordinates' aces3.log 
+      sed -ne "/  Summary of optimized Cartesian coordinates/, /   Frequencies of/ p" aces3.log > acestemp2
+      sed -ie "s/  Summary of optimized Cartesian coordinates//" acestemp2
+      sed -ie "s/   Frequencies of the updated Hessian at convergence://" acestemp2
+      echo '...coordinates saved to: ' coords
+      mv acestemp2 coords 
+      breaksw
+##### GAMESS-US
+     case gamess
+      echo '...this doesnt work yet.'
+      breaksw
+##### NWCHEM
+     case nwchem
+      grep -q 'Infra Red Intensities' ${file} 
+      sed -ne "/Infra Red Intensities/,/ ----------------------------------/ p" $file > nwchemtemp
+      sed -ne "/Infra Red Intensities/,/           Projected Infra Red Intensities/ p" nwchemtemp > nwchemtemp2
+      sed -ne "/           Projected Infra Red Intensities/,/ ------------------------------------/ p" nwchemtemp > nwchemtemp3
+      set mode_index=`cut -c4-5 nwchemtemp2`
+      set eigenvalues=`cut -c12-18 nwchemtemp2`
+      set line_num=`cat nwchemtemp2 | wc -l` # count # of lines in file: there are 5 non-freq lines
+      echo 'there are: ' `echo " $line_num - 5" | bc -l` 'normal modes.'
+      echo 'the normal modes are:'
+      @ n=3 # start printing @ 4th line; dont print last 3 lines.
+      while ($n <= `echo " $line_num - 3" | bc -l`)
+      @ n++
+       echo $mode_index[$n] $eigenvalues[$n]
+      end  
+      breaksw
+##### ORCA
+     case orca
+      echo '...looking at output file' $file
+      set ok=0
+      grep -q 'FINAL ENERGY EVALUATION AT THE STATIONARY POINT' $file && set ok=1
+      if (${ok} == 1) then
+       echo '...optimized geometry found.'
+       sed -ne "/FINAL ENERGY EVALUATION AT THE STATIONARY /,/BASIS SET INFORMATION/ p" $file > orcatemp
+       sed -ne "/CARTESIAN COORDINATES (ANGSTROEM)/,/CARTESIAN COORDINATES (A.U.)/ p" orcatemp > orcatemp1
+       awk "NF == 4" orcatemp1 > orcatemp2
+       cp orcatemp2 geo
+       echo '...optimized coordinates saved to file geo.'
+      else
+       echo '...check' $file '. Something went wrong with the optimization.'
+      endif
+      set ok2=0
+      grep 'imaginary' $file && set ok2=1
+      if (${ok2} != 1) then
+       echo '...there are at least one imaginary frequencies. Check' $file 'for more info'
+      endif
+      grep -q 'VIBRATIONAL FREQUENCIES' $file
+      sed -ne "/VIBRATIONAL FREQUENCIES/,/NORMAL MODES/ p" $file > orcatemp3
+      awk 'NF == 3' orcatemp3 > orcatemp4
+      cp orcatemp4 freq 
+      echo '...vibrational frequencies saved to file freq.'
+     breaksw
+##### DEFAULT
+     default 
+      echo '...idk where those results are from.'
+      echo '...I dont know of an electronic structure code called:' $code
+      exit 
+endsw
+
+# clean up temporary files
+ \rm *temp*
